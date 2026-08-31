@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nano.Clima — Estação Meteorológica</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  :root {
+    --primary: #0ea5e9;
+    --accent: #f97316;
+    --success: #10b981;
+    --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0c4a6e 100%);
+    --card-bg: rgba(255, 255, 255, 0.08);
+    --card-border: rgba(255, 255, 255, 0.15);
+    --text: #f1f5f9;
+    --text-muted: #94a3b8;
+  }
+  
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg-gradient);
+    background-attachment: fixed;
+    color: var(--text);
+    min-height: 100vh;
+    padding: 2rem 1rem;
+    line-height: 1.6;
+  }
+  
+  .container { max-width: 1200px; margin: 0 auto; }
+  
+  header {
+    text-align: center;
+    margin-bottom: 3rem;
+    animation: fadeInDown 0.8s ease-out;
+  }
+  
+  .logo {
+    font-size: 2.5rem;
+    font-weight: 800;
+    background: linear-gradient(90deg, #38bdf8, #f97316);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    letter-spacing: -1px;
+  }
+  
+  .subtitle {
+    color: var(--text-muted);
+    font-size: 1rem;
+    margin-top: 0.5rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  
+  .timestamp {
+    display: inline-block;
+    margin-top: 1rem;
+    padding: 0.5rem 1.25rem;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 999px;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    backdrop-filter: blur(10px);
+  }
+  
+  .status-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    background: var(--success);
+    border-radius: 50%;
+    margin-right: 8px;
+    animation: pulse 2s infinite;
+  }
+  
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    padding: 1.75rem;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    animation: fadeInUp 0.6s ease-out backwards;
+  }
+  
+  .card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    border-color: rgba(255, 255, 255, 0.25);
+  }
+  
+  .card:nth-child(1) { animation-delay: 0.05s; }
+  .card:nth-child(2) { animation-delay: 0.10s; }
+  .card:nth-child(3) { animation-delay: 0.15s; }
+  .card:nth-child(4) { animation-delay: 0.20s; }
+  
+  .card-icon { font-size: 2rem; margin-bottom: 0.75rem; }
+  .card-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 0.5rem;
+  }
+  .card-value {
+    font-size: 2.5rem;
+    font-weight: 700;
+    letter-spacing: -1px;
+  }
+  .card-unit {
+    font-size: 1rem;
+    color: var(--text-muted);
+    font-weight: 400;
+    margin-left: 4px;
+  }
+  
+  .card.eto {
+    background: linear-gradient(135deg, rgba(14, 165, 233, 0.15), rgba(16, 185, 129, 0.05));
+    border-color: rgba(14, 165, 233, 0.3);
+  }
+  
+  .minmax-row {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--card-border);
+  }
+  .minmax-item { text-align: center; flex: 1; }
+  .minmax-label { font-size: 0.75rem; color: var(--text-muted); }
+  .minmax-value { font-size: 1.25rem; font-weight: 600; margin-top: 0.25rem; }
+  .min-min { color: #60a5fa; }
+  .min-max { color: #f87171; }
+  
+  /* ============================================
+     CARD DPV (SEMÁFORO)
+     ============================================ */
+  .dpv-card {
+    border-radius: 24px;
+    padding: 2rem;
+    backdrop-filter: blur(20px);
+    margin-bottom: 2rem;
+    animation: fadeInUp 0.8s ease-out 0.35s backwards;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.5s ease;
+  }
+  
+  .dpv-card::before {
+    content: '';
+    position: absolute;
+    top: -50%; right: -20%;
+    width: 400px; height: 400px;
+    border-radius: 50%;
+    pointer-events: none;
+    opacity: 0.15;
+  }
+  
+  .dpv-card.dpv-roxo {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.15), rgba(139, 92, 246, 0.05));
+    border: 1px solid rgba(168, 85, 247, 0.4);
+  }
+  .dpv-card.dpv-roxo::before { background: radial-gradient(circle, rgba(168, 85, 247, 0.3), transparent 70%); }
+  .dpv-card.dpv-roxo .dpv-value { color: #c084fc; text-shadow: 0 4px 20px rgba(168, 85, 247, 0.3); }
+  .dpv-card.dpv-roxo .dpv-status { color: #c084fc; background: rgba(168, 85, 247, 0.15); border-color: rgba(168, 85, 247, 0.3); }
+  
+  .dpv-card.dpv-azul {
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(14, 165, 233, 0.05));
+    border: 1px solid rgba(56, 189, 248, 0.4);
+  }
+  .dpv-card.dpv-azul::before { background: radial-gradient(circle, rgba(56, 189, 248, 0.3), transparent 70%); }
+  .dpv-card.dpv-azul .dpv-value { color: #7dd3fc; text-shadow: 0 4px 20px rgba(56, 189, 248, 0.3); }
+  .dpv-card.dpv-azul .dpv-status { color: #7dd3fc; background: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.3); }
+  
+  .dpv-card.dpv-verde {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(52, 211, 153, 0.05));
+    border: 1px solid rgba(16, 185, 129, 0.4);
+  }
+  .dpv-card.dpv-verde::before { background: radial-gradient(circle, rgba(16, 185, 129, 0.3), transparent 70%); }
+  .dpv-card.dpv-verde .dpv-value { color: #6ee7b7; text-shadow: 0 4px 20px rgba(16, 185, 129, 0.3); }
+  .dpv-card.dpv-verde .dpv-status { color: #6ee7b7; background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); }
+  
+  .dpv-card.dpv-amarelo {
+    background: linear-gradient(135deg, rgba(234, 179, 8, 0.15), rgba(250, 204, 21, 0.05));
+    border: 1px solid rgba(234, 179, 8, 0.4);
+  }
+  .dpv-card.dpv-amarelo::before { background: radial-gradient(circle, rgba(234, 179, 8, 0.3), transparent 70%); }
+  .dpv-card.dpv-amarelo .dpv-value { color: #fde047; text-shadow: 0 4px 20px rgba(234, 179, 8, 0.3); }
+  .dpv-card.dpv-amarelo .dpv-status { color: #fde047; background: rgba(234, 179, 8, 0.15); border-color: rgba(234, 179, 8, 0.3); }
+  
+  .dpv-card.dpv-vermelho {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(248, 113, 113, 0.05));
+    border: 1px solid rgba(239, 68, 68, 0.4);
+  }
+  .dpv-card.dpv-vermelho::before { background: radial-gradient(circle, rgba(239, 68, 68, 0.3), transparent 70%); }
+  .dpv-card.dpv-vermelho .dpv-value { color: #fca5a5; text-shadow: 0 4px 20px rgba(239, 68, 68, 0.3); }
+  .dpv-card.dpv-vermelho .dpv-status { color: #fca5a5; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); }
+  
+  .dpv-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    position: relative;
+  }
+  
+  .dpv-icon {
+    font-size: 2rem;
+    padding: 0.6rem;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  
+  .dpv-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+  }
+  
+  .dpv-subtitle {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: 0.15rem;
+  }
+  
+  .dpv-body {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    flex-wrap: wrap;
+    position: relative;
+  }
+  
+  .dpv-main {
+    flex: 1;
+    min-width: 200px;
+    text-align: center;
+  }
+  
+  .dpv-value {
+    font-size: 4rem;
+    font-weight: 800;
+    letter-spacing: -2px;
+    line-height: 1;
+  }
+  
+  .dpv-unit {
+    font-size: 1.2rem;
+    color: var(--text-muted);
+    font-weight: 400;
+    margin-left: 4px;
+  }
+  
+  .dpv-status {
+    display: inline-block;
+    margin-top: 0.75rem;
+    padding: 0.4rem 1.2rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border: 1px solid;
+    letter-spacing: 0.5px;
+  }
+  
+  .dpv-stats {
+    flex: 1;
+    min-width: 250px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+  
+  .dpv-stat {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 0.85rem;
+    text-align: center;
+  }
+  
+  .dpv-stat-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  
+  .dpv-stat-value {
+    font-size: 1.35rem;
+    font-weight: 700;
+    margin-top: 0.2rem;
+  }
+  
+  .dpv-scale {
+    margin-top: 1.5rem;
+    position: relative;
+  }
+  
+  .dpv-scale-bar {
+    height: 8px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #a855f7 0%, #38bdf8 20%, #10b981 40%, #eab308 65%, #ef4444 100%);
+    position: relative;
+  }
+  
+  .dpv-scale-marker {
+    position: absolute;
+    top: -6px;
+    width: 20px; height: 20px;
+    background: white;
+    border-radius: 50%;
+    border: 3px solid #0f172a;
+    transform: translateX(-50%);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    transition: left 0.5s ease;
+  }
+  
+  .dpv-scale-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.5rem;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+  }
+  
+  .recommendation-card {
+    border-radius: 24px;
+    padding: 2.5rem 2rem;
+    backdrop-filter: blur(20px);
+    margin-bottom: 2rem;
+    animation: fadeInUp 0.8s ease-out 0.45s backwards;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .recommendation-card::before {
+    content: '';
+    position: absolute;
+    top: -50%; right: -20%;
+    width: 400px; height: 400px;
+    border-radius: 50%;
+    pointer-events: none;
+    opacity: 0.15;
+  }
+  
+  .recommendation-card.rec-verde {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(14, 165, 233, 0.08));
+    border: 1px solid rgba(16, 185, 129, 0.35);
+  }
+  .recommendation-card.rec-verde::before { background: radial-gradient(circle, rgba(16, 185, 129, 0.3), transparent 70%); }
+  .recommendation-card.rec-verde .rec-title { color: #6ee7b7; }
+  .recommendation-card.rec-verde .rec-main-value { color: #6ee7b7; text-shadow: 0 4px 20px rgba(16, 185, 129, 0.3); }
+  .recommendation-card.rec-verde .rec-icon { background: rgba(16, 185, 129, 0.2); border-color: rgba(16, 185, 129, 0.3); }
+  
+  .recommendation-card.rec-amarelo {
+    background: linear-gradient(135deg, rgba(234, 179, 8, 0.12), rgba(249, 115, 22, 0.08));
+    border: 1px solid rgba(234, 179, 8, 0.35);
+  }
+  .recommendation-card.rec-amarelo::before { background: radial-gradient(circle, rgba(234, 179, 8, 0.3), transparent 70%); }
+  .recommendation-card.rec-amarelo .rec-title { color: #fde047; }
+  .recommendation-card.rec-amarelo .rec-main-value { color: #fde047; text-shadow: 0 4px 20px rgba(234, 179, 8, 0.3); }
+  .recommendation-card.rec-amarelo .rec-icon { background: rgba(234, 179, 8, 0.2); border-color: rgba(234, 179, 8, 0.3); }
+  
+  .recommendation-card.rec-vermelho {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(249, 115, 22, 0.08));
+    border: 1px solid rgba(239, 68, 68, 0.35);
+  }
+  .recommendation-card.rec-vermelho::before { background: radial-gradient(circle, rgba(239, 68, 68, 0.3), transparent 70%); }
+  .recommendation-card.rec-vermelho .rec-title { color: #fca5a5; }
+  .recommendation-card.rec-vermelho .rec-main-value { color: #fca5a5; text-shadow: 0 4px 20px rgba(239, 68, 68, 0.3); }
+  .recommendation-card.rec-vermelho .rec-icon { background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.3); }
+  
+  .recommendation-card.rec-azul {
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.12), rgba(14, 165, 233, 0.08));
+    border: 1px solid rgba(56, 189, 248, 0.35);
+  }
+  .recommendation-card.rec-azul::before { background: radial-gradient(circle, rgba(56, 189, 248, 0.3), transparent 70%); }
+  .recommendation-card.rec-azul .rec-title { color: #7dd3fc; }
+  .recommendation-card.rec-azul .rec-main-value { color: #7dd3fc; text-shadow: 0 4px 20px rgba(56, 189, 248, 0.3); }
+  .recommendation-card.rec-azul .rec-icon { background: rgba(56, 189, 248, 0.2); border-color: rgba(56, 189, 248, 0.3); }
+  
+  .recommendation-card.rec-roxo {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.12), rgba(139, 92, 246, 0.08));
+    border: 1px solid rgba(168, 85, 247, 0.35);
+  }
+  .recommendation-card.rec-roxo::before { background: radial-gradient(circle, rgba(168, 85, 247, 0.3), transparent 70%); }
+  .recommendation-card.rec-roxo .rec-title { color: #c084fc; }
+  .recommendation-card.rec-roxo .rec-main-value { color: #c084fc; text-shadow: 0 4px 20px rgba(168, 85, 247, 0.3); }
+  .recommendation-card.rec-roxo .rec-icon { background: rgba(168, 85, 247, 0.2); border-color: rgba(168, 85, 247, 0.3); }
+  
+  .rec-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    position: relative;
+  }
+  
+  .rec-icon {
+    font-size: 2.5rem;
+    padding: 0.75rem;
+    border-radius: 16px;
+    border: 1px solid;
+  }
+  
+  .rec-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+  }
+  
+  .rec-subtitle {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+  }
+  
+  .rec-main {
+    text-align: center;
+    padding: 2rem 1rem;
+    position: relative;
+  }
+  
+  .rec-main-label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 0.75rem;
+  }
+  
+  .rec-main-value {
+    font-size: 5rem;
+    font-weight: 800;
+    letter-spacing: -3px;
+    line-height: 1;
+  }
+  
+  .rec-main-unit {
+    font-size: 1.5rem;
+    color: var(--text-muted);
+    font-weight: 400;
+    margin-left: 8px;
+  }
+  
+  .rec-formula {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    flex-wrap: wrap;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+  
+  .rec-formula-item {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--card-border);
+    padding: 0.5rem 1rem;
+    border-radius: 10px;
+  }
+  
+  .rec-formula-item strong {
+    color: var(--text);
+    font-weight: 600;
+  }
+  
+  .rec-tip {
+    margin-top: 2rem;
+    padding: 1.25rem 1.5rem;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    position: relative;
+  }
+  
+  .rec-tip-icon { font-size: 1.5rem; flex-shrink: 0; }
+  .rec-tip-text { flex: 1; }
+  .rec-tip-title { font-weight: 600; color: var(--text); margin-bottom: 0.25rem; }
+  .rec-tip-desc { font-size: 0.9rem; color: var(--text-muted); }
+  
+  .chart-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    padding: 2rem;
+    backdrop-filter: blur(20px);
+    margin-bottom: 2rem;
+    animation: fadeInUp 0.8s ease-out 0.6s backwards;
+  }
+  
+  .chart-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .chart-container { position: relative; height: 300px; }
+  
+  .charts-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  
+  .chart-card.compact { margin-bottom: 0; }
+  .chart-card.compact .chart-container { height: 250px; }
+  
+  .forecast-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    padding: 2rem;
+    backdrop-filter: blur(20px);
+    margin-bottom: 2rem;
+    animation: fadeInUp 0.8s ease-out 0.9s backwards;
+  }
+  
+  .forecast-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .forecast-container { height: 220px; position: relative; }
+  
+  footer {
+    text-align: center;
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--card-border);
+    color: var(--text-muted);
+    font-size: 0.875rem;
+  }
+  
+  footer strong {
+    background: linear-gradient(90deg, #38bdf8, #f97316);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  .loading {
+    text-align: center;
+    padding: 4rem 1rem;
+    color: var(--text-muted);
+  }
+  
+  .spinner {
+    width: 50px; height: 50px;
+    border: 3px solid var(--card-border);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    margin: 0 auto 1rem;
+    animation: spin 1s linear infinite;
+  }
+  
+  .error {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+    padding: 1rem;
+    border-radius: 12px;
+    text-align: center;
+  }
+  
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.2); }
+  }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeInDown {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  @media (max-width: 640px) {
+    .logo { font-size: 2rem; }
+    .card-value { font-size: 2rem; }
+    .dpv-value { font-size: 3rem; }
+    .rec-main-value { font-size: 3.5rem; }
+    body { padding: 1rem 0.5rem; }
+    .rec-header, .dpv-header { flex-direction: column; text-align: center; }
+    .dpv-body { flex-direction: column; }
+    .rec-formula { flex-direction: column; gap: 0.5rem; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="logo">☀️ Nano.Clima</div>
+    <div class="subtitle">Estação Meteorológica Inteligente</div>
+    <div class="timestamp">
+      <span class="status-dot"></span>
+      <span id="timestamp">Carregando...</span>
+    </div>
+  </header>
+
+  <div id="content">
+    <div class="loading">
+      <div class="spinner"></div>
+      <p>Buscando dados das últimas 24 horas...</p>
+    </div>
+  </div>
+
+  <footer>
+    <p>Desenvolvido pela <strong>EQUIPE CÃO</strong></p>
+    <p style="margin-top: 0.5rem; font-size: 0.75rem;">
+      ETo: Hargreaves-Samani · DPV: Tetens · Previsão: Open-Meteo · Atualização a cada 15 min
+    </p>
+  </footer>
+</div>
+
+<script>
+// ==========================================
+// CONFIGURAÇÕES
+// ==========================================
+const CONFIG = {
+  channel: '3124909',
+  latitude: -9.3982,      // Petrolina/PE
+  longitude: -40.5026,    // Petrolina/PE
+  kc: 1.00,
+  eficiencia: 0.90,
+  refreshInterval: 15 * 60 * 1000
+};
+
+// ==========================================
+// CÁLCULO DE ETo (Hargreaves-Samani)
+// ==========================================
+function calcularETo(tMax, tMin, lat, kc, ef) {
+  const J = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
+  const delta = 0.409 * Math.sin((2 * Math.PI / 365) * J - 1.39);
+  const latRad = lat * Math.PI / 180;
+  const ws = Math.acos(-Math.tan(latRad) * Math.tan(delta));
+  const dr = 1 + 0.033 * Math.cos((2 * Math.PI / 365) * J);
+  const Ra = (24 * 60 / Math.PI) * 0.0820 * dr * 
+    (ws * Math.sin(latRad) * Math.sin(delta) + 
+     Math.cos(latRad) * Math.cos(delta) * Math.sin(ws));
+  const tMean = (tMax + tMin) / 2.0;
+  const eto = 0.0023 * Ra * (tMean + 17.8) * Math.sqrt(Math.max(0, tMax - tMin));
+  const lamina = (eto * kc) / ef;
+  return { eto: eto.toFixed(2), lamina: lamina.toFixed(2) };
+}
+
+// ==========================================
+// CÁLCULO DE DPV (Fórmula de Tetens)
+// ==========================================
+function calcularDPV(temp, ur) {
+  const es = 0.6108 * Math.exp((17.27 * temp) / (temp + 237.3));
+  const ea = es * (ur / 100);
+  return es - ea;
+}
+
+function classificarDPV(dpv) {
+  if (dpv < 0.4) return {
+    classe: 'roxo',
+    emoji: '🟣',
+    status: 'AR MUITO ÚMIDO',
+    descricao: 'Risco de doenças fúngicas. Evite irrigação por aspersão.',
+    prioridade: 'Baixa demanda hídrica'
+  };
+  if (dpv < 0.8) return {
+    classe: 'azul',
+    emoji: '🔵',
+    status: 'BAIXA TRANSPIRAÇÃO',
+    descricao: 'Planta confortável. Pode adiar irrigação se o solo estiver úmido.',
+    prioridade: 'Demanda reduzida'
+  };
+  if (dpv < 1.2) return {
+    classe: 'verde',
+    emoji: '🟢',
+    status: 'ZONA IDEAL',
+    descricao: 'Transpiração ótima. Irrigue conforme a lâmina calculada.',
+    prioridade: 'Irrigar normalmente'
+  };
+  if (dpv < 1.6) return {
+    classe: 'amarelo',
+    emoji: '🟡',
+    status: 'ALTA TRANSPIRAÇÃO',
+    descricao: 'Planta perdendo bastante água. Priorize a irrigação.',
+    prioridade: 'Priorizar irrigação'
+  };
+  return {
+    classe: 'vermelho',
+    emoji: '🔴',
+    status: 'ESTRESSE HÍDRICO',
+    descricao: 'Planta sob estresse! Irrigue com urgência.',
+    prioridade: 'Urgente'
+  };
+}
+
+// ==========================================
+// PREVISÃO DE CHUVA (Open-Meteo)
+// ==========================================
+async function buscarPrevisaoChuva() {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${CONFIG.latitude}&longitude=${CONFIG.longitude}&daily=precipitation_sum,precipitation_probability_max,weathercode&timezone=America%2FSao_Paulo&forecast_days=7`;
+  try {
+    const resp = await fetch(url);
+    const data = await resp.json();
+    return data.daily;
+  } catch (err) {
+    console.warn('Falha na previsão:', err);
+    return null;
+  }
+}
+
+// ==========================================
+// FORMATAÇÃO DE DATA
+// ==========================================
+function formatarDataBR(date) {
+  return date.toLocaleString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
+}
+
+function formatarDiaSemana(dateStr, hojeStr = null) {
+  const [ano, mes, dia] = dateStr.split('-').map(Number);
+  const d = new Date(ano, mes - 1, dia, 12, 0, 0);
+  const semana = d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
+  const data = `${String(dia).padStart(2,'0')}/${String(mes).padStart(2,'0')}`;
+  
+  if (hojeStr && dateStr === hojeStr) {
+    return `HOJE ${semana}`;
+  }
+  return `${semana} ${data}`;
+}
+
+// ==========================================
+// BUSCA DE DADOS NO THINGSPEAK
+// ==========================================
+async function buscarDados() {
+  const fim = new Date();
+  const inicio = new Date(fim.getTime() - 24 * 60 * 60 * 1000);
+  const url = `https://api.thingspeak.com/channels/${CONFIG.channel}/feeds.json?results=500&start=${inicio.toISOString()}&end=${fim.toISOString()}`;
+  const resp = await fetch(url);
+  const data = await resp.json();
+  if (!data.feeds || data.feeds.length === 0) throw new Error('Sem dados disponíveis');
+  return data.feeds;
+}
+
+// ==========================================
+// RENDERIZAÇÃO
+// ==========================================
+async function renderizar(feeds, previsao) {
+  const ultima = feeds[feeds.length - 1];
+  const temps = feeds.map(f => parseFloat(f.field1)).filter(t => !isNaN(t));
+  const umids = feeds.map(f => parseFloat(f.field2)).filter(u => !isNaN(u));
+  const press = feeds.map(f => parseFloat(f.field3)).filter(p => !isNaN(p));
+  
+  const tAtual = parseFloat(ultima.field1);
+  const umidade = parseFloat(ultima.field2);
+  const pressao = parseFloat(ultima.field3);
+  const tMin = Math.min(...temps);
+  const tMax = Math.max(...temps);
+  const uMin = Math.min(...umids);
+  const uMax = Math.max(...umids);
+  const pMin = Math.min(...press);
+  const pMax = Math.max(...press);
+  
+  const { eto, lamina } = calcularETo(tMax, tMin, CONFIG.latitude, CONFIG.kc, CONFIG.eficiencia);
+  
+  const dpvAtual = calcularDPV(tAtual, umidade);
+  const dpvInfo = classificarDPV(dpvAtual);
+  
+  const dpvs = [];
+  const dpvLabels = [];
+  feeds.forEach(f => {
+    const t = parseFloat(f.field1);
+    const u = parseFloat(f.field2);
+    if (!isNaN(t) && !isNaN(u)) {
+      dpvs.push(calcularDPV(t, u));
+      const d = new Date(f.created_at);
+      dpvLabels.push(d.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }));
+    }
+  });
+  
+  const dpvMedio = dpvs.length > 0 ? dpvs.reduce((a, b) => a + b, 0) / dpvs.length : 0;
+  const dpvMax = dpvs.length > 0 ? Math.max(...dpvs) : 0;
+  const dpvMin = dpvs.length > 0 ? Math.min(...dpvs) : 0;
+  
+  let dpvPicoHora = '--:--';
+  if (dpvs.length > 0) {
+    const idxMax = dpvs.indexOf(dpvMax);
+    dpvPicoHora = dpvLabels[idxMax];
+  }
+  
+  const marcadorPos = Math.min(100, Math.max(0, (dpvAtual / 3.5) * 100));
+  
+  document.getElementById('timestamp').textContent = 
+    `Atualizado em ${formatarDataBR(new Date())}`;
+  
+  let dicaIcone, dicaTitulo, dicaDesc;
+  if (dpvAtual >= 1.6) {
+    dicaIcone = '🚨';
+    dicaTitulo = 'Irrigue o mais rápido possível';
+    dicaDesc = 'O ar está muito seco e a planta está perdendo água rapidamente. Se possível, irrigue agora ou nas próximas horas.';
+  } else if (dpvAtual >= 1.2) {
+    dicaIcone = '⏰';
+    dicaTitulo = 'Priorize a irrigação hoje';
+    dicaDesc = `Melhor horário: entre <strong>4h e 7h da manhã</strong> — menor evaporação e a planta absorve melhor.`;
+  } else if (dpvAtual >= 0.8) {
+    dicaIcone = '🌅';
+    dicaTitulo = 'Melhor horário para irrigar';
+    dicaDesc = `Entre <strong>4h e 7h da manhã</strong> — menor evaporação, menos vento e absorção mais eficiente.`;
+  } else if (dpvAtual >= 0.4) {
+    dicaIcone = '💤';
+    dicaTitulo = 'Demanda baixa no momento';
+    dicaDesc = 'A planta está transpirando pouco. Verifique a umidade do solo antes de irrigar — pode não ser necessário agora.';
+  } else {
+    dicaIcone = '🍄';
+    dicaTitulo = 'Atenção: risco de doenças fúngicas';
+    dicaDesc = 'O ar está muito úmido. Evite irrigação por aspersão e monitore sinais de fungos nas folhas.';
+  }
+  
+  document.getElementById('content').innerHTML = `
+    <div class="grid">
+      <div class="card">
+        <div class="card-icon">🌡️</div>
+        <div class="card-label">Temperatura Atual</div>
+        <div class="card-value">${tAtual.toFixed(1)}<span class="card-unit">°C</span></div>
+        <div class="minmax-row">
+          <div class="minmax-item"><div class="minmax-label">Mínima 24h</div><div class="minmax-value min-min">${tMin.toFixed(1)}°C</div></div>
+          <div class="minmax-item"><div class="minmax-label">Máxima 24h</div><div class="minmax-value min-max">${tMax.toFixed(1)}°C</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-icon">💧</div>
+        <div class="card-label"> Umidade Relativa</div>
+        <div class="card-value">${umidade.toFixed(0)}<span class="card-unit">%</span></div>
+        <div class="minmax-row">
+          <div class="minmax-item"><div class="minmax-label">Mínima 24h</div><div class="minmax-value min-min">${uMin.toFixed(0)}%</div></div>
+          <div class="minmax-item"><div class="minmax-label">Máxima 24h</div><div class="minmax-value min-max">${uMax.toFixed(0)}%</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-icon">💨</div>
+        <div class="card-label">Pressão Atmosférica</div>
+        <div class="card-value">${pressao.toFixed(0)}<span class="card-unit">hPa</span></div>
+        <div class="minmax-row">
+          <div class="minmax-item"><div class="minmax-label">Mínima 24h</div><div class="minmax-value min-min">${pMin.toFixed(0)}</div></div>
+          <div class="minmax-item"><div class="minmax-label">Máxima 24h</div><div class="minmax-value min-max">${pMax.toFixed(0)}</div></div>
+        </div>
+      </div>
+      <div class="card eto">
+        <div class="card-icon">☀️</div>
+        <div class="card-label">Evapotranspiração (ETo)</div>
+        <div class="card-value">${eto}<span class="card-unit">mm/dia</span></div>
+        <div style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-muted);">
+          Método Hargreaves-Samani
+        </div>
+        <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--card-border); font-size: 0.8rem; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center;">
+          <span>Base: ${feeds.length} leituras/24h</span>
+          <span style="padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,0.1);">
+            ${feeds.length < 50 ? '⚠️ Poucas' : '✅ Boa'}
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="dpv-card dpv-${dpvInfo.classe}">
+      <div class="dpv-header">
+        <div class="dpv-icon">🌫️</div>
+        <div>
+          <div class="dpv-title">Déficit de Pressão de Vapor (DPV)</div>
+          <div class="dpv-subtitle">Indicador de estresse hídrico da planta</div>
+        </div>
+      </div>
+      <div class="dpv-body">
+        <div class="dpv-main">
+          <div class="dpv-value">${dpvAtual.toFixed(2)}<span class="dpv-unit">kPa</span></div>
+          <div class="dpv-status">${dpvInfo.emoji} ${dpvInfo.status}</div>
+        </div>
+        <div class="dpv-stats">
+          <div class="dpv-stat"><div class="dpv-stat-label">Média 24h</div><div class="dpv-stat-value" style="color: var(--text);">${dpvMedio.toFixed(2)} kPa</div></div>
+          <div class="dpv-stat"><div class="dpv-stat-label">Pico (máx)</div><div class="dpv-stat-value" style="color: #fca5a5;">${dpvMax.toFixed(2)} kPa</div></div>
+          <div class="dpv-stat"><div class="dpv-stat-label">Mínimo</div><div class="dpv-stat-value" style="color: #7dd3fc;">${dpvMin.toFixed(2)} kPa</div></div>
+          <div class="dpv-stat"><div class="dpv-stat-label">Pico às</div><div class="dpv-stat-value" style="color: var(--text);">${dpvPicoHora}</div></div>
+        </div>
+      </div>
+      <div class="dpv-scale">
+        <div class="dpv-scale-bar"><div class="dpv-scale-marker" style="left: ${marcadorPos}%;"></div></div>
+        <div class="dpv-scale-labels">
+          <span>0 (úmido)</span><span>0.8</span><span>1.2</span><span>1.6</span><span>3.5+ (seco)</span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="recommendation-card rec-${dpvInfo.classe}">
+      <div class="rec-header">
+        <div class="rec-icon">💧</div>
+        <div>
+          <div class="rec-title">Lâmina de Irrigação para Hoje</div>
+          <div class="rec-subtitle">${dpvInfo.prioridade} · DPV: ${dpvAtual.toFixed(2)} kPa</div>
+        </div>
+      </div>
+      <div class="rec-main">
+        <div class="rec-main-label">Aplique hoje</div>
+        <div class="rec-main-value">${lamina}<span class="rec-main-unit">mm/dia</span></div>
+        <div class="rec-formula">
+          <div class="rec-formula-item">ETo: <strong>${eto} mm</strong></div>
+          <div class="rec-formula-item">Kc: <strong>${CONFIG.kc.toFixed(2)}</strong></div>
+          <div class="rec-formula-item">Eficiência: <strong>${(CONFIG.eficiencia*100).toFixed(0)}%</strong></div>
+        </div>
+      </div>
+      <div class="rec-tip">
+        <div class="rec-tip-icon">${dicaIcone}</div>
+        <div class="rec-tip-text">
+          <div class="rec-tip-title">${dicaTitulo}</div>
+          <div class="rec-tip-desc">${dicaDesc}</div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="chart-card">
+      <div class="chart-title">🌡️ Evolução da Temperatura — Últimas 24h</div>
+      <div class="chart-container"><canvas id="tempChart"></canvas></div>
+    </div>
+    
+    <div class="charts-grid">
+      <div class="chart-card compact">
+        <div class="chart-title">💧 Umidade Relativa — Últimas 24h</div>
+        <div class="chart-container"><canvas id="umidChart"></canvas></div>
+      </div>
+      <div class="chart-card compact">
+        <div class="chart-title">💨 Pressão Atmosférica — Últimas 24h</div>
+        <div class="chart-container"><canvas id="pressChart"></canvas></div>
+      </div>
+    </div>
+    
+    <div class="chart-card">
+      <div class="chart-title">🌫️ Evolução do DPV — Últimas 24h</div>
+      <div class="chart-container"><canvas id="dpvChart"></canvas></div>
+    </div>
+    
+    ${previsao ? `
+    <div class="forecast-card">
+      <div class="forecast-title">📅 Previsão de Chuva — Próximos 7 dias (Petrolina/PE) · <span style="color: var(--text-muted); font-weight: 400; font-size: 0.9rem;">Hoje: ${new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit' })}</span></div>
+      <div class="forecast-container"><canvas id="forecastChart"></canvas></div>
+    </div>
+    ` : ''}
+  `;
+  
+  desenharGraficos(feeds, dpvLabels, dpvs, previsao);
+}
+
+// ==========================================
+// GRÁFICOS
+// ==========================================
+function criarGradiente(ctx, cor) {
+  const g = ctx.createLinearGradient(0, 0, 0, 300);
+  g.addColorStop(0, cor.replace('1)', '0.4)'));
+  g.addColorStop(1, cor.replace('1)', '0)'));
+  return g;
+}
+
+function configBase(ticksY) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+        titleColor: '#f1f5f9',
+        bodyColor: '#f1f5f9',
+        borderColor: 'rgba(255,255,255,0.1)',
+        borderWidth: 1,
+        padding: 12,
+        cornerRadius: 8
+      }
+    },
+    scales: {
+      x: {
+        ticks: { color: '#94a3b8', maxTicksLimit: 8 },
+        grid: { color: 'rgba(255,255,255,0.05)' }
+      },
+      y: {
+        ticks: { color: '#94a3b8', callback: ticksY },
+        grid: { color: 'rgba(255,255,255,0.05)' }
+      }
+    }
+  };
+}
+
+function desenharGraficos(feeds, dpvLabels, dpvs, previsao) {
+  const labels = feeds.map(f => {
+    const d = new Date(f.created_at);
+    return d.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
+  });
+  
+// Temperatura
+const ctxT = document.getElementById('tempChart').getContext('2d');
+new Chart(ctxT, {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [{
+      label: 'Temperatura (°C)',
+      data: feeds.map(f => parseFloat(f.field1)),
+      borderColor: '#f97316',
+      backgroundColor: criarGradiente(ctxT, 'rgba(249, 115, 22, 1)'),
+      borderWidth: 2, fill: true, tension: 0.4,
+      pointRadius: 0, pointHoverRadius: 5
+    }]
+  },
+  options: configBase(v => v.toFixed(1) + '°C')  // ✅ 1 casa decimal
+});
+  
+ // Umidade
+const ctxU = document.getElementById('umidChart').getContext('2d');
+new Chart(ctxU, {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [{
+      label: 'Umidade (%)',
+      data: feeds.map(f => parseFloat(f.field2)),
+      borderColor: '#38bdf8',
+      backgroundColor: criarGradiente(ctxU, 'rgba(56, 189, 248, 1)'),
+      borderWidth: 2, fill: true, tension: 0.4,
+      pointRadius: 0, pointHoverRadius: 5
+    }]
+  },
+  options: configBase(v => v.toFixed(0) + '%')  // ✅ Sem decimais
+});
+
+// Pressão
+const ctxP = document.getElementById('pressChart').getContext('2d');
+new Chart(ctxP, {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [{
+      label: 'Pressão (hPa)',
+      data: feeds.map(f => parseFloat(f.field3)),
+      borderColor: '#10b981',
+      backgroundColor: criarGradiente(ctxP, 'rgba(16, 185, 129, 1)'),
+      borderWidth: 2, fill: true, tension: 0.4,
+      pointRadius: 0, pointHoverRadius: 5
+    }]
+  },
+  options: configBase(v => v.toFixed(0) + ' hPa')  // ✅ Sem decimais
+});
+  
+  const ctxD = document.getElementById('dpvChart').getContext('2d');
+  new Chart(ctxD, {
+    type: 'line',
+    data: {
+      labels: dpvLabels,
+      datasets: [{
+        label: 'DPV (kPa)',
+        data: dpvs,
+        borderColor: '#a78bfa',
+        backgroundColor: criarGradiente(ctxD, 'rgba(167, 139, 250, 1)'),
+        borderWidth: 2, fill: true, tension: 0.4,
+        pointRadius: 0, pointHoverRadius: 5
+      }]
+    },
+    options: {
+      ...configBase(v => v.toFixed(1) + ' kPa'),
+      plugins: { ...configBase(v => v).plugins, annotation: undefined },
+      scales: {
+        ...configBase(v => v).scales,
+        y: {
+          ...configBase(v => v).scales.y,
+          ticks: { color: '#94a3b8', callback: v => v.toFixed(1) + ' kPa' },
+          min: 0
+        }
+      }
+    }
+  });
+  
+  // Previsão 7 dias
+  if (previsao) {
+    const ctxF = document.getElementById('forecastChart').getContext('2d');
+    const hojeBR = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+    
+    const dias = previsao.time.map(d => formatarDiaSemana(d, hojeBR));
+    const chuva = previsao.precipitation_sum.map(v => v || 0);
+    const prob = previsao.precipitation_probability_max.map(v => v || 0);
+    
+    const coresBarras = previsao.time.map(d => d === hojeBR ? 'rgba(249, 115, 22, 0.85)' : 'rgba(56, 189, 248, 0.7)');
+    const bordasBarras = previsao.time.map(d => d === hojeBR ? '#f97316' : '#38bdf8');
+    
+    new Chart(ctxF, {
+      type: 'bar',
+      data: {
+        labels: dias,
+        datasets: [
+          {
+            label: 'Chuva (mm)',
+            data: chuva,
+            backgroundColor: coresBarras,
+            borderColor: bordasBarras,
+            borderWidth: 1,
+            borderRadius: 6,
+            yAxisID: 'y'
+          },
+          {
+            label: 'Probabilidade (%)',
+            data: prob,
+            type: 'line',
+            borderColor: '#f97316',
+            backgroundColor: 'rgba(249, 115, 22, 0.1)',
+            borderWidth: 2,
+            tension: 0.4,
+            pointRadius: 4,
+            pointBackgroundColor: '#f97316',
+            yAxisID: 'y1'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { 
+            labels: { 
+              color: '#94a3b8',
+              font: { weight: '600' },
+              generateLabels: function(chart) {
+                return [
+                  {
+                    text: 'Chuva (mm)',
+                    fillStyle: 'rgba(56, 189, 248, 0.7)',
+                    strokeStyle: '#38bdf8',
+                    lineWidth: 2,
+                    hidden: false,
+                    datasetIndex: 0,
+                    fontColor: '#94a3b8'
+                  },
+                  {
+                    text: 'Probabilidade (%)',
+                    fillStyle: 'rgba(249, 115, 22, 0.1)',
+                    strokeStyle: '#f97316',
+                    lineWidth: 2,
+                    hidden: false,
+                    datasetIndex: 1,
+                    fontColor: '#94a3b8'
+                  }
+                ];
+              }
+            } 
+          },
+          tooltip: {
+            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+            titleColor: '#f1f5f9',
+            bodyColor: '#f1f5f9',
+            padding: 12,
+            cornerRadius: 8
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: '#94a3b8', font: { weight: '600' } },
+            grid: { color: 'rgba(255,255,255,0.05)' }
+          },
+          y: {
+            position: 'left',
+            title: { display: true, text: 'mm', color: '#38bdf8', font: { weight: '600' } },
+            ticks: { color: '#38bdf8' },
+            grid: { color: 'rgba(255,255,255,0.05)' },
+            beginAtZero: true
+          },
+          y1: {
+            position: 'right',
+            title: { display: true, text: '%', color: '#f97316', font: { weight: '600' } },
+            ticks: { color: '#f97316' },
+            grid: { display: false },
+            min: 0, max: 100
+          }
+        }
+      }
+    });
+  }
+}
+
+// ==========================================
+// INICIALIZAÇÃO
+// ==========================================
+async function iniciar() {
+  try {
+    const [feeds, previsao] = await Promise.all([buscarDados(), buscarPrevisaoChuva()]);
+    await renderizar(feeds, previsao);
+  } catch (err) {
+    document.getElementById('content').innerHTML = `<div class="error">❌ ${err.message}</div>`;
+  }
+}
+
+iniciar();
+setInterval(iniciar, CONFIG.refreshInterval);
+</script>
+</body>
+</html>
